@@ -1,0 +1,36 @@
+# Backbot Configuration
+# Copy to ~/.config/backbot/backbot.conf and edit
+
+# S3 Settings
+S3_BUCKET="your-backup-bucket-name"
+S3_REGION="us-west-1"
+S3_STORAGE_CLASS="DEEP_ARCHIVE"
+
+# Source directory to back up
+BACKUP_SOURCE="$HOME"
+
+# GPG encryption mode: "keychain" (macOS Keychain) or "env" (PASSPHRASE env var)
+GPG_MODE="keychain"
+# Keychain service name (used when GPG_MODE=keychain)
+KEYCHAIN_SERVICE="backbot-gpg"
+KEYCHAIN_ACCOUNT="backbot"
+
+# Backup schedule
+# Full backup interval (duplicity time format: D=days, W=weeks, M=months)
+FULL_IF_OLDER_THAN="1M"
+# Remove full backups older than this
+REMOVE_OLDER_THAN="12M"
+# Remove incremental backups older than this
+REMOVE_INCREMENTALS_OLDER_THAN="30D"
+
+# Volume size in MB (larger = fewer PUTs = cheaper, but less resumable)
+VOLSIZE=250
+
+# Notifications: "terminal-notifier" or "none"
+NOTIFY="terminal-notifier"
+
+# Log retention in days
+LOG_RETENTION_DAYS=90
+
+# Exclude file path (default: alongside config)
+EXCLUDE_FILE="$HOME/.config/backbot/exclude.list"

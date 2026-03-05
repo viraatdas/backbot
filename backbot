@@ -1,0 +1,392 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ── Constants ──────────────────────────────────────────────────────────
+VERSION="1.0.0"
+CONFIG_DIR="$HOME/.config/backbot"
+CONFIG_FILE="$CONFIG_DIR/backbot.conf"
+LOG_DIR="$HOME/.local/share/backbot/logs"
+CACHE_DIR="$HOME/.cache/duplicity"
+PLIST_NAME="com.backbot.nightly"
+PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
+RESTORE_STATE_FILE="$CONFIG_DIR/.restore-state"
+
+# ── Helpers ────────────────────────────────────────────────────────────
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+
+load_config() {
+    [[ -f "$CONFIG_FILE" ]] || die "Config not found: $CONFIG_FILE — run 'backbot install' first"
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+    # Validate required vars
+    [[ -n "${S3_BUCKET:-}" ]] || die "S3_BUCKET not set in config"
+    [[ -n "${S3_REGION:-}" ]] || die "S3_REGION not set in config"
+    S3_URL="boto3+s3://${S3_BUCKET}"
+    export AWS_DEFAULT_REGION="${S3_REGION}"
+}
+
+get_passphrase() {
+    local mode="${GPG_MODE:-keychain}"
+    if [[ "$mode" == "keychain" ]]; then
+        security find-generic-password \
+            -s "${KEYCHAIN_SERVICE:-backbot-gpg}" \
+            -a "${KEYCHAIN_ACCOUNT:-backbot}" \
+            -w 2>/dev/null || die "Could not retrieve passphrase from Keychain. Re-run install."
+    elif [[ "$mode" == "env" ]]; then
+        [[ -n "${PASSPHRASE:-}" ]] || die "GPG_MODE=env but PASSPHRASE not set"
+        echo "$PASSPHRASE"
+    else
+        die "Unknown GPG_MODE: $mode"
+    fi
+}
+
+notify() {
+    local title="$1" message="$2"
+    if [[ "${NOTIFY:-none}" == "terminal-notifier" ]] && command -v terminal-notifier &>/dev/null; then
+        terminal-notifier -title "$title" -message "$message" -group backbot
+    fi
+}
+
+ensure_log_dir() {
+    mkdir -p "$LOG_DIR"
+}
+
+cleanup_old_logs() {
+    local retention="${LOG_RETENTION_DAYS:-90}"
+    find "$LOG_DIR" -name "backup-*.log" -mtime +"$retention" -delete 2>/dev/null || true
+}
+
+# ── Commands ───────────────────────────────────────────────────────────
+
+cmd_backup() {
+    load_config
+    ensure_log_dir
+
+    local force_full=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --full) force_full=true; shift ;;
+            *) die "Unknown option: $1" ;;
+        esac
+    done
+
+    local logfile="$LOG_DIR/backup-$(date '+%Y%m%d-%H%M%S').log"
+    local passphrase
+    passphrase="$(get_passphrase)"
+
+    log "Starting backup to s3://${S3_BUCKET}"
+    log "Log: $logfile"
+
+    local full_flag=""
+    if [[ "$force_full" == true ]]; then
+        full_flag="full"
+        log "Forcing full backup"
+    fi
+
+    local exit_code=0
+    PASSPHRASE="$passphrase" duplicity \
+        $full_flag \
+        --full-if-older-than "${FULL_IF_OLDER_THAN:-1M}" \
+        --volsize "${VOLSIZE:-250}" \
+        --s3-use-deep-archive \
+        --exclude-filelist "${EXCLUDE_FILE:-$CONFIG_DIR/exclude.list}" \
+        --name "backbot" \
+        "$HOME" \
+        "$S3_URL" \
+        2>&1 | tee "$logfile" || exit_code=${PIPESTATUS[0]}
+
+    if [[ $exit_code -eq 0 ]]; then
+        log "Backup completed successfully"
+        notify "Backbot" "Backup completed successfully"
+
+        # Cleanup old backups
+        log "Cleaning up old backups..."
+        PASSPHRASE="$passphrase" duplicity remove-older-than \
+            "${REMOVE_OLDER_THAN:-12M}" \
+            --force \
+            --name "backbot" \
+            "$S3_URL" 2>&1 | tee -a "$logfile"
+
+        PASSPHRASE="$passphrase" duplicity remove-all-inc-of-but-n-full \
+            1 \
+            --force \
+            --name "backbot" \
+            "$S3_URL" 2>&1 | tee -a "$logfile"
+    else
+        log "Backup FAILED (exit code $exit_code)"
+        notify "Backbot FAILED" "Backup failed — check $logfile"
+        exit "$exit_code"
+    fi
+
+    cleanup_old_logs
+}
+
+cmd_list() {
+    load_config
+    local passphrase
+    passphrase="$(get_passphrase)"
+
+    PASSPHRASE="$passphrase" duplicity collection-status \
+        --name "backbot" \
+        "$S3_URL"
+}
+
+cmd_status() {
+    load_config
+    ensure_log_dir
+
+    echo "=== Backbot Status ==="
+    echo
+
+    # Last backup
+    local latest_log
+    latest_log="$(ls -t "$LOG_DIR"/backup-*.log 2>/dev/null | head -1 || true)"
+    if [[ -n "$latest_log" ]]; then
+        local log_time
+        log_time="$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$latest_log" 2>/dev/null || stat -c '%y' "$latest_log" 2>/dev/null | cut -d. -f1)"
+        echo "Last backup log: $log_time"
+        echo "Log file: $latest_log"
+        echo
+        echo "--- Last 10 lines ---"
+        tail -10 "$latest_log"
+        echo
+    else
+        echo "No backup logs found"
+        echo
+    fi
+
+    # Cache size
+    if [[ -d "$CACHE_DIR" ]]; then
+        local cache_size
+        cache_size="$(du -sh "$CACHE_DIR" 2>/dev/null | cut -f1)"
+        echo "Duplicity cache: $cache_size ($CACHE_DIR)"
+    else
+        echo "Duplicity cache: not found"
+    fi
+    echo
+
+    # Launchd status
+    if launchctl list "$PLIST_NAME" &>/dev/null; then
+        echo "Scheduled: YES (launchd loaded)"
+        echo "Next run: daily at 23:59"
+    else
+        echo "Scheduled: NO (launchd not loaded)"
+    fi
+}
+
+cmd_restore() {
+    load_config
+
+    local target_path="" restore_time="" restore_dest="" continue_restore=false expedite=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --continue) continue_restore=true; shift ;;
+            --time) restore_time="$2"; shift 2 ;;
+            --dest) restore_dest="$2"; shift 2 ;;
+            --expedite) expedite=true; shift ;;
+            -*) die "Unknown option: $1" ;;
+            *) target_path="$1"; shift ;;
+        esac
+    done
+
+    local passphrase
+    passphrase="$(get_passphrase)"
+
+    if [[ "$continue_restore" == true ]]; then
+        _restore_continue "$passphrase"
+        return
+    fi
+
+    [[ -n "$target_path" ]] || die "Usage: backbot restore <path> [--time T] [--dest D] [--expedite]"
+    [[ -n "$restore_dest" ]] || restore_dest="/tmp/backbot-restore"
+
+    log "Initiating Glacier restore for objects in s3://${S3_BUCKET}"
+
+    # Determine restore tier
+    local tier="Bulk"
+    local eta="12-48 hours"
+    if [[ "$expedite" == true ]]; then
+        tier="Standard"
+        eta="3-5 hours"
+    fi
+
+    log "Restore tier: $tier (estimated $eta)"
+
+    # List objects in the bucket and initiate restore
+    local objects
+    objects="$(aws s3api list-objects-v2 --bucket "$S3_BUCKET" --query 'Contents[].Key' --output text 2>/dev/null)" \
+        || die "Failed to list S3 objects. Check your AWS credentials and bucket name."
+
+    local initiated=0
+    local already_restoring=0
+    local already_available=0
+
+    for key in $objects; do
+        local storage_class
+        storage_class="$(aws s3api head-object --bucket "$S3_BUCKET" --key "$key" --query 'StorageClass' --output text 2>/dev/null || echo "UNKNOWN")"
+
+        if [[ "$storage_class" != "DEEP_ARCHIVE" && "$storage_class" != "GLACIER" ]]; then
+            continue
+        fi
+
+        local restore_status
+        restore_status="$(aws s3api head-object --bucket "$S3_BUCKET" --key "$key" --query 'Restore' --output text 2>/dev/null || echo "")"
+
+        if [[ "$restore_status" == *"ongoing-request=\"true\""* ]]; then
+            ((already_restoring++))
+            continue
+        elif [[ "$restore_status" == *"ongoing-request=\"false\""* ]]; then
+            ((already_available++))
+            continue
+        fi
+
+        aws s3api restore-object \
+            --bucket "$S3_BUCKET" \
+            --key "$key" \
+            --restore-request "{\"Days\":7,\"GlacierJobParameters\":{\"Tier\":\"$tier\"}}" \
+            2>/dev/null || true
+        ((initiated++))
+    done
+
+    log "Restore requests: $initiated initiated, $already_restoring in progress, $already_available available"
+
+    # Save restore state
+    cat > "$RESTORE_STATE_FILE" <<EOF
+RESTORE_PATH="$target_path"
+RESTORE_DEST="$restore_dest"
+RESTORE_TIME="${restore_time:-}"
+RESTORE_INITIATED="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+RESTORE_TIER="$tier"
+EOF
+
+    echo
+    log "Glacier thaw initiated. Estimated wait: $eta"
+    log "Run 'backbot restore --continue' once thaw completes to finish the restore."
+}
+
+_restore_continue() {
+    local passphrase="$1"
+
+    [[ -f "$RESTORE_STATE_FILE" ]] || die "No pending restore. Run 'backbot restore <path>' first."
+    # shellcheck source=/dev/null
+    source "$RESTORE_STATE_FILE"
+
+    log "Checking Glacier restore status..."
+
+    # Check if objects are available
+    local objects
+    objects="$(aws s3api list-objects-v2 --bucket "$S3_BUCKET" --query 'Contents[].Key' --output text 2>/dev/null)"
+
+    local still_pending=0
+    local available=0
+    for key in $objects; do
+        local storage_class
+        storage_class="$(aws s3api head-object --bucket "$S3_BUCKET" --key "$key" --query 'StorageClass' --output text 2>/dev/null || echo "UNKNOWN")"
+
+        if [[ "$storage_class" != "DEEP_ARCHIVE" && "$storage_class" != "GLACIER" ]]; then
+            ((available++))
+            continue
+        fi
+
+        local restore_status
+        restore_status="$(aws s3api head-object --bucket "$S3_BUCKET" --key "$key" --query 'Restore' --output text 2>/dev/null || echo "")"
+
+        if [[ "$restore_status" == *"ongoing-request=\"true\""* ]]; then
+            ((still_pending++))
+        elif [[ "$restore_status" == *"ongoing-request=\"false\""* ]]; then
+            ((available++))
+        else
+            ((still_pending++))
+        fi
+    done
+
+    log "Status: $available available, $still_pending still thawing"
+
+    if [[ $still_pending -gt 0 ]]; then
+        die "Glacier thaw still in progress ($still_pending objects pending). Try again later."
+    fi
+
+    log "All objects available. Starting duplicity restore..."
+
+    mkdir -p "$RESTORE_DEST"
+
+    local time_flag=""
+    if [[ -n "${RESTORE_TIME:-}" ]]; then
+        time_flag="--time $RESTORE_TIME"
+    fi
+
+    local file_flag=""
+    if [[ -n "${RESTORE_PATH:-}" && "$RESTORE_PATH" != "/" ]]; then
+        file_flag="--file-to-restore $RESTORE_PATH"
+    fi
+
+    # shellcheck disable=SC2086
+    PASSPHRASE="$passphrase" duplicity restore \
+        $time_flag \
+        $file_flag \
+        --name "backbot" \
+        "$S3_URL" \
+        "$RESTORE_DEST"
+
+    log "Restore complete: $RESTORE_DEST"
+    rm -f "$RESTORE_STATE_FILE"
+}
+
+cmd_install() {
+    exec bash "$(dirname "$0")/install.sh"
+}
+
+cmd_uninstall() {
+    exec bash "$(dirname "$0")/uninstall.sh"
+}
+
+cmd_help() {
+    cat <<'EOF'
+Backbot - Nightly Mac Backup to S3 Glacier Deep Archive
+
+Usage: backbot <command> [options]
+
+Commands:
+  backup [--full]                    Run incremental (or forced full) backup
+  list                               Show available backup snapshots
+  status                             Last backup time, schedule, cache info
+  restore <path> [options]           Restore files from backup
+    --time T                         Restore from time T (duplicity format)
+    --dest D                         Restore destination (default: /tmp/backbot-restore)
+    --expedite                       Use Standard tier (3-5hrs, costs more)
+  restore --continue                 Continue restore after Glacier thaw
+  install                            Run first-time setup
+  uninstall                          Remove launchd job and config
+  help                               Show this help
+  version                            Show version
+
+EOF
+}
+
+cmd_version() {
+    echo "backbot $VERSION"
+}
+
+# ── Main ───────────────────────────────────────────────────────────────
+
+main() {
+    local cmd="${1:-help}"
+    shift || true
+
+    case "$cmd" in
+        backup)    cmd_backup "$@" ;;
+        list)      cmd_list "$@" ;;
+        status)    cmd_status "$@" ;;
+        restore)   cmd_restore "$@" ;;
+        install)   cmd_install "$@" ;;
+        uninstall) cmd_uninstall "$@" ;;
+        help|--help|-h) cmd_help ;;
+        version|--version|-v) cmd_version ;;
+        *) die "Unknown command: $cmd — run 'backbot help'" ;;
+    esac
+}
+
+main "$@"
