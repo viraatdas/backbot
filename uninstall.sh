@@ -3,7 +3,8 @@ set -euo pipefail
 
 PLIST_NAME="com.backbot.nightly"
 PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
-SYMLINK_PATH="/usr/local/bin/backbot"
+SYMLINK_PATH="$HOME/.local/bin/backbot"
+INSTALL_DIR="$HOME/.backbot"
 CONFIG_DIR="$HOME/.config/backbot"
 LOG_DIR="$HOME/.local/share/backbot/logs"
 
@@ -58,6 +59,13 @@ fi
 echo
 echo "=== Uninstall Complete ==="
 echo
+# ── Optional: remove install directory ─────────────────────────────────
+read -rp "Remove backbot install directory ($INSTALL_DIR)? [y/N] " answer
+if [[ "${answer:-N}" =~ ^[Yy]$ ]]; then
+    rm -rf "$INSTALL_DIR"
+    echo "  Removed"
+fi
+
+echo
 echo "Note: Your S3 backup data was NOT removed."
-echo "Note: The backbot source directory was NOT removed."
 echo "Note: Duplicity cache (~/.cache/duplicity) was NOT removed."

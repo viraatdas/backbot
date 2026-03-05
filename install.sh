@@ -1,22 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# ── Constants ──────────────────────────────────────────────────────────
+REPO="viraatdas/backbot"
+INSTALL_DIR="$HOME/.backbot"
 CONFIG_DIR="$HOME/.config/backbot"
 LOG_DIR="$HOME/.local/share/backbot/logs"
 PLIST_NAME="com.backbot.nightly"
-PLIST_SRC="$SCRIPT_DIR/com.backbot.nightly.plist"
 PLIST_DEST="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
-SYMLINK_DEST="/usr/local/bin/backbot"
+BIN_DIR="$HOME/.local/bin"
 
 echo "=== Backbot Installer ==="
 echo
 
-# ── Check dependencies ─────────────────────────────────────────────────
+# ── Download backbot ───────────────────────────────────────────────────
+if [[ -d "$INSTALL_DIR/.git" ]]; then
+    echo "Updating backbot in $INSTALL_DIR..."
+    git -C "$INSTALL_DIR" pull --quiet
+else
+    echo "Downloading backbot to $INSTALL_DIR..."
+    rm -rf "$INSTALL_DIR"
+    git clone --quiet "https://github.com/$REPO.git" "$INSTALL_DIR"
+fi
+echo
+
+# ── Check dependencies ────────────────────────────────────────────────
 echo "Checking dependencies..."
 
 missing=()
-for cmd in duplicity gpg aws terminal-notifier python3; do
+for cmd in duplicity gpg aws terminal-notifier; do
     if ! command -v "$cmd" &>/dev/null; then
         missing+=("$cmd")
     fi
@@ -25,6 +37,12 @@ done
 if [[ ${#missing[@]} -gt 0 ]]; then
     echo "Missing: ${missing[*]}"
     echo
+
+    if ! command -v brew &>/dev/null; then
+        echo "Homebrew not found. Install it first: https://brew.sh"
+        exit 1
+    fi
+
     read -rp "Install via Homebrew? [Y/n] " answer
     if [[ "${answer:-Y}" =~ ^[Yy]?$ ]]; then
         brew_pkgs=()
@@ -34,7 +52,6 @@ if [[ ${#missing[@]} -gt 0 ]]; then
                 gpg) brew_pkgs+=("gnupg") ;;
                 aws) brew_pkgs+=("awscli") ;;
                 terminal-notifier) brew_pkgs+=("terminal-notifier") ;;
-                python3) brew_pkgs+=("python3") ;;
             esac
         done
         brew install "${brew_pkgs[@]}"
@@ -44,38 +61,25 @@ if [[ ${#missing[@]} -gt 0 ]]; then
     fi
 fi
 
-# Check boto3
-if ! python3 -c "import boto3" 2>/dev/null; then
-    echo "Python boto3 not found (required by duplicity for S3)."
-    read -rp "Install boto3 via pip? [Y/n] " answer
-    if [[ "${answer:-Y}" =~ ^[Yy]?$ ]]; then
-        pip3 install boto3
-    else
-        echo "Please install boto3 and re-run."
-        exit 1
-    fi
-fi
-
 echo "All dependencies OK."
 echo
 
-# ── Create directories ─────────────────────────────────────────────────
+# ── Create directories ────────────────────────────────────────────────
 echo "Creating directories..."
-mkdir -p "$CONFIG_DIR"
-mkdir -p "$LOG_DIR"
+mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$BIN_DIR" "$HOME/Library/LaunchAgents"
 echo "  $CONFIG_DIR"
 echo "  $LOG_DIR"
 echo
 
-# ── Copy config and exclude list ───────────────────────────────────────
+# ── Copy config and exclude list ──────────────────────────────────────
 if [[ ! -f "$CONFIG_DIR/backbot.conf" ]]; then
-    cp "$SCRIPT_DIR/backbot.conf.example" "$CONFIG_DIR/backbot.conf"
+    cp "$INSTALL_DIR/backbot.conf.example" "$CONFIG_DIR/backbot.conf"
     echo "Config created: $CONFIG_DIR/backbot.conf"
 else
     echo "Config already exists: $CONFIG_DIR/backbot.conf (keeping)"
 fi
 
-cp "$SCRIPT_DIR/exclude.list" "$CONFIG_DIR/exclude.list"
+cp "$INSTALL_DIR/exclude.list" "$CONFIG_DIR/exclude.list"
 echo "Exclude list: $CONFIG_DIR/exclude.list"
 echo
 
@@ -98,52 +102,57 @@ else
     fi
 fi
 
-# Write bucket to config
 sed -i '' "s|^S3_BUCKET=.*|S3_BUCKET=\"$bucket_name\"|" "$CONFIG_DIR/backbot.conf"
 echo
 
-# ── GPG passphrase ─────────────────────────────────────────────────────
-echo "Generating GPG passphrase for backup encryption..."
-PASSPHRASE="$(LC_ALL=C tr -dc 'A-Za-z0-9!@#$%^&*()_+-=' < /dev/urandom | head -c 64)"
-
-security add-generic-password \
-    -s "backbot-gpg" \
-    -a "backbot" \
-    -w "$PASSPHRASE" \
-    -U \
-    -T "" 2>/dev/null || true
-
-# Verify it's stored
+# ── GPG passphrase ────────────────────────────────────────────────────
 if security find-generic-password -s "backbot-gpg" -a "backbot" -w &>/dev/null; then
-    echo "Passphrase stored in macOS Keychain (service: backbot-gpg)"
+    echo "GPG passphrase already in Keychain (keeping)"
 else
-    echo "WARNING: Failed to store passphrase in Keychain."
-    echo "You may need to set GPG_MODE=env and export PASSPHRASE manually."
+    echo "Generating GPG passphrase for backup encryption..."
+    PASSPHRASE="$(LC_ALL=C tr -dc 'A-Za-z0-9!@#$%^&*()_+-=' < /dev/urandom | head -c 64)"
+    security add-generic-password \
+        -s "backbot-gpg" \
+        -a "backbot" \
+        -w "$PASSPHRASE" \
+        -U \
+        -T "" 2>/dev/null || true
+
+    if security find-generic-password -s "backbot-gpg" -a "backbot" -w &>/dev/null; then
+        echo "Passphrase stored in macOS Keychain (service: backbot-gpg)"
+    else
+        echo "WARNING: Failed to store passphrase in Keychain."
+        echo "You may need to set GPG_MODE=env and export PASSPHRASE manually."
+    fi
 fi
 echo
 
-# ── Install launchd plist ──────────────────────────────────────────────
+# ── Install launchd plist ─────────────────────────────────────────────
 echo "Installing launchd job..."
 
-# Update plist with correct user home
-sed "s|/Users/viraat|$HOME|g" "$PLIST_SRC" > "$PLIST_DEST"
+sed "s|/Users/viraat|$HOME|g" "$INSTALL_DIR/com.backbot.nightly.plist" > "$PLIST_DEST"
 
-# Unload first if already loaded
+# Also update the binary path in the plist to point to our install
+sed -i '' "s|$HOME/.local/bin/backbot|$BIN_DIR/backbot|g" "$PLIST_DEST"
+
 launchctl bootout "gui/$(id -u)/$PLIST_NAME" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST_DEST"
 
-echo "Launchd job installed: $PLIST_DEST"
-echo "Scheduled: daily at 23:59"
+echo "Launchd job installed: daily at 23:59"
 echo
 
 # ── Symlink CLI ────────────────────────────────────────────────────────
 echo "Creating symlink..."
-if [[ -L "$SYMLINK_DEST" || -f "$SYMLINK_DEST" ]]; then
-    rm -f "$SYMLINK_DEST"
+chmod +x "$INSTALL_DIR/backbot"
+ln -sf "$INSTALL_DIR/backbot" "$BIN_DIR/backbot"
+echo "  $BIN_DIR/backbot -> $INSTALL_DIR/backbot"
+
+# Check if BIN_DIR is in PATH
+if ! echo "$PATH" | tr ':' '\n' | grep -q "$BIN_DIR"; then
+    echo
+    echo "NOTE: Add $BIN_DIR to your PATH:"
+    echo "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.zshrc"
 fi
-chmod +x "$SCRIPT_DIR/backbot"
-ln -s "$SCRIPT_DIR/backbot" "$SYMLINK_DEST"
-echo "  $SYMLINK_DEST -> $SCRIPT_DIR/backbot"
 echo
 
 # ── Done ───────────────────────────────────────────────────────────────
@@ -157,5 +166,5 @@ echo
 
 read -rp "Run initial full backup now? [y/N] " answer
 if [[ "${answer:-N}" =~ ^[Yy]$ ]]; then
-    "$SCRIPT_DIR/backbot" backup --full
+    "$BIN_DIR/backbot" backup --full
 fi

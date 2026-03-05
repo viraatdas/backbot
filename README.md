@@ -4,17 +4,30 @@ Nightly Mac backup to S3 Glacier Deep Archive. ~$8/year for 500GB.
 
 Uses `duplicity` for incremental, encrypted, tar-based backups — fewer S3 PUTs, local signature cache (never reads from Glacier), GPG encryption built in.
 
-## Quick Start
+## Install
 
 ```bash
-# Install dependencies + configure
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/viraatdas/backbot/main/install.sh | bash
+```
 
-# Run first full backup
+This will:
+- Clone backbot to `~/.backbot/`
+- Install dependencies via Homebrew (`duplicity`, `gnupg`, `awscli`, `terminal-notifier`)
+- Generate an encryption passphrase and store it in macOS Keychain
+- Prompt for your S3 bucket name
+- Set up the nightly launchd job (11:59 PM)
+- Add `backbot` to your PATH (`~/.local/bin/`)
+
+Then run your first backup:
+
+```bash
 backbot backup --full
+```
 
-# Check status
-backbot status
+To uninstall:
+
+```bash
+backbot uninstall
 ```
 
 ## CLI Reference
