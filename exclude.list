@@ -1,5 +1,5 @@
 # Backbot exclusion list for duplicity
-# Uses duplicity/rsync exclude pattern syntax
+# All patterns use **/ prefix for globbing filelist compatibility
 
 # Version control internals
 **/.git
@@ -24,25 +24,25 @@
 **/.TemporaryItems
 
 # macOS system caches and logs
-Library/Caches
-Library/Logs
-Library/Developer
-Library/Application Support/MobileSync
-.Trash
+**/Library/Caches
+**/Library/Logs
+**/Library/Developer
+**/Library/Application Support/MobileSync
+**/.Trash
 
 # Package manager caches
-.cache
-.npm
-.yarn/cache
-.pnpm-store
-.cargo/registry
-.cargo/git
-.rustup
-.gradle/caches
-.cocoapods
-.gem
-.cpan
-.m2/repository
+**/.cache
+**/.npm
+**/.yarn/cache
+**/.pnpm-store
+**/.cargo/registry
+**/.cargo/git
+**/.rustup
+**/.gradle/caches
+**/.cocoapods
+**/.gem
+**/.cpan
+**/.m2/repository
 
 # Python virtual environments
 **/.venv
@@ -52,19 +52,19 @@ Library/Application Support/MobileSync
 **/.pytest_cache
 
 # Docker
-.docker/buildx
-Library/Containers/com.docker.*
+**/.docker/buildx
+**/Library/Containers/com.docker.*
 
 # Steam and games
-Library/Application Support/Steam/steamapps
-Library/Application Support/Steam/SteamApps
+**/Library/Application Support/Steam/steamapps
+**/Library/Application Support/Steam/SteamApps
 
 # Large reproducible app data
-Library/Application Support/Slack/Cache
-Library/Application Support/Slack/Service Worker
-Library/Application Support/discord/Cache
-Library/Application Support/Google/Chrome/Default/Service Worker
-Library/Application Support/Firefox/Profiles/*/cache2
+**/Library/Application Support/Slack/Cache
+**/Library/Application Support/Slack/Service Worker
+**/Library/Application Support/discord/Cache
+**/Library/Application Support/Google/Chrome/Default/Service Worker
+**/Library/Application Support/Firefox/Profiles/*/cache2
 
 # Virtual machines
 **/*.vmdk
@@ -79,7 +79,7 @@ Library/Application Support/Firefox/Profiles/*/cache2
 **/tmp
 
 # Duplicity's own cache
-.cache/duplicity
+**/.cache/duplicity
 
 # Homebrew downloads
-Library/Caches/Homebrew
+**/Library/Caches/Homebrew
