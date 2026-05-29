@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>backbot — nightly Mac backups to S3 Glacier</title>
+<meta name="description" content="backbot is a tiny CLI that backs up your Mac nightly to your own S3 Glacier bucket. End-to-end encrypted with restic. ~$8/year." />
+<meta property="og:title" content="backbot — nightly Mac backups to S3 Glacier" />
+<meta property="og:description" content="A tiny CLI that backs up your Mac nightly to your own S3 Glacier bucket. Encrypted with restic. ~$8/year." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://backbot.viraat.dev" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0c10;
+    --bg-soft: #11141b;
+    --panel: #141821;
+    --line: #232936;
+    --text: #e7ebf2;
+    --muted: #8a93a6;
+    --dim: #5d6677;
+    --accent: #6ee7a8;
+    --accent-2: #7aa2ff;
+    --amber: #f5c451;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(900px 500px at 80% -10%, rgba(122,162,255,0.10), transparent 60%),
+      radial-gradient(800px 500px at 10% 0%, rgba(110,231,168,0.08), transparent 55%);
+    background-repeat: no-repeat;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* nav */
+  nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 0; border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 14px var(--accent); }
+  .brand code { font-family: var(--mono); font-size: 1.05rem; color: var(--text); }
+  .nav-links { display: flex; gap: 22px; font-size: 0.92rem; }
+  .nav-links a { color: var(--muted); }
+  .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+  /* hero */
+  header { padding: 84px 0 56px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 20px;
+  }
+  h1 {
+    font-size: clamp(2.4rem, 6vw, 3.8rem); line-height: 1.05;
+    letter-spacing: -0.03em; font-weight: 700; margin-bottom: 22px;
+  }
+  h1 .grad {
+    background: linear-gradient(100deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede { font-size: 1.2rem; color: var(--muted); max-width: 620px; }
+  .lede strong { color: var(--text); font-weight: 600; }
+
+  /* install command */
+  .cmd {
+    margin: 36px 0 14px; display: flex; align-items: stretch;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden; max-width: 640px;
+  }
+  .cmd .prompt {
+    font-family: var(--mono); font-size: 0.92rem; padding: 16px 18px;
+    display: flex; align-items: center; gap: 12px; flex: 1; overflow-x: auto; white-space: nowrap;
+  }
+  .cmd .prompt .sigil { color: var(--accent); user-select: none; }
+  .cmd button {
+    font-family: var(--sans); font-size: 0.82rem; font-weight: 600;
+    border: none; border-left: 1px solid var(--line); background: var(--bg-soft);
+    color: var(--muted); padding: 0 18px; cursor: pointer; transition: color .15s, background .15s;
+  }
+  .cmd button:hover { color: var(--text); background: #1a1f2a; }
+  .cmd button.copied { color: var(--accent); }
+  .sub { font-size: 0.9rem; color: var(--dim); }
+  .sub code { font-family: var(--mono); color: var(--muted); }
+
+  /* sections */
+  section { padding: 52px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 1.7rem; letter-spacing: -0.02em; margin-bottom: 10px; }
+  .section-intro { color: var(--muted); max-width: 640px; margin-bottom: 30px; }
+
+  /* feature grid */
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .card {
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px;
+    padding: 22px 22px 20px;
+  }
+  .card h3 { font-size: 1.02rem; margin-bottom: 6px; display: flex; align-items: center; gap: 9px; }
+  .card h3 .ic { color: var(--accent); font-family: var(--mono); font-size: 0.95rem; }
+  .card p { font-size: 0.94rem; color: var(--muted); }
+
+  /* steps */
+  .steps { counter-reset: step; display: flex; flex-direction: column; gap: 14px; }
+  .step {
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px 18px 60px; position: relative;
+  }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 18px; top: 18px;
+    width: 28px; height: 28px; border-radius: 8px;
+    background: rgba(110,231,168,0.12); color: var(--accent);
+    border: 1px solid rgba(110,231,168,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 600; font-size: 0.9rem;
+  }
+  .step h3 { font-size: 1rem; margin-bottom: 3px; }
+  .step p { font-size: 0.92rem; color: var(--muted); }
+  .step code { font-family: var(--mono); font-size: 0.85em; background: var(--panel);
+    border: 1px solid var(--line); padding: 1px 6px; border-radius: 5px; color: var(--text); }
+
+  /* terminal block */
+  .term {
+    background: #0c0e13; border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden; margin-top: 8px;
+  }
+  .term .bar {
+    display: flex; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--line);
+    background: var(--bg-soft);
+  }
+  .term .bar span { width: 11px; height: 11px; border-radius: 50%; background: #2c3340; }
+  .term .bar span:nth-child(1) { background: #ff5f57; }
+  .term .bar span:nth-child(2) { background: #febc2e; }
+  .term .bar span:nth-child(3) { background: #28c840; }
+  .term pre {
+    font-family: var(--mono); font-size: 0.86rem; line-height: 1.7;
+    padding: 18px 20px; overflow-x: auto; color: var(--text);
+  }
+  .term .c-prompt { color: var(--accent); }
+  .term .c-cmd { color: var(--text); }
+  .term .c-out { color: var(--muted); }
+  .term .c-key { color: var(--amber); }
+
+  /* commands table */
+  .cmds { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
+  .cmds td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .cmds tr:last-child td { border-bottom: none; }
+  .cmds td:first-child { white-space: nowrap; width: 1%; }
+  .cmds code { font-family: var(--mono); color: var(--accent); font-size: 0.86rem; }
+  .cmds td:last-child { color: var(--muted); }
+
+  .note {
+    margin-top: 22px; font-size: 0.9rem; color: var(--muted);
+    background: rgba(245,196,81,0.06); border: 1px solid rgba(245,196,81,0.22);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .note b { color: var(--amber); }
+
+  /* cost */
+  .cost { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+  .cost .c {
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px;
+    padding: 22px; text-align: center;
+  }
+  .cost .c .big { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
+  .cost .c .big.accent { color: var(--accent); }
+  .cost .c .lbl { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 40px 0 60px;
+    color: var(--dim); font-size: 0.9rem; display: flex;
+    justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+  }
+  footer a { color: var(--muted); }
+
+  @media (max-width: 640px) {
+    .grid, .cost { grid-template-columns: 1fr; }
+    .nav-links a:not(.gh) { display: none; }
+    header { padding: 56px 0 40px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <nav>
+    <div class="brand"><span class="dot"></span><code>backbot</code></div>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#aws">AWS keys</a>
+      <a href="#cli">CLI</a>
+      <a class="gh" href="https://github.com/viraatdas/backbot">GitHub ↗</a>
+    </div>
+  </nav>
+
+  <header>
+    <div class="eyebrow">nightly mac backups · your bucket · your keys</div>
+    <h1>Back up your Mac to <span class="grad">S3 Glacier</span>,<br />automatically, every night.</h1>
+    <p class="lede">backbot is a tiny CLI that snapshots your home directory to <strong>your own</strong> S3 Glacier bucket every night — <strong>end-to-end encrypted</strong> with restic, deduplicated, and restorable in seconds. About <strong>$8 a year</strong>.</p>
+
+    <div class="cmd">
+      <div class="prompt"><span class="sigil">$</span><span id="install">curl -fsSL https://raw.githubusercontent.com/viraatdas/backbot/main/install.sh | bash</span></div>
+      <button id="copyBtn" onclick="copyInstall()">Copy</button>
+    </div>
+    <p class="sub">macOS · requires <code>restic</code>, <code>awscli</code> (the installer offers to brew them for you)</p>
+  </header>
+
+  <section id="features">
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">🔒</span> Encrypted client-side</h3>
+        <p>restic encrypts everything before it leaves your machine. The repo password lives in your macOS Keychain — not even AWS can read your files.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">☁︎</span> Your account, your bucket</h3>
+        <p>No third-party service in the middle. backbot talks straight to S3 with the AWS keys you provide. You own the data and the bill.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">⚡</span> Glacier IR — instant restore</h3>
+        <p>Defaults to Glacier Instant Retrieval: archival pricing, but restores in seconds with no 12–48h thaw wait.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">🌙</span> Set it and forget it</h3>
+        <p>A launchd job runs nightly at 23:59 <em>and at every login</em>. Incremental and deduplicated, so daily runs are fast and cheap.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <h2>How it works</h2>
+    <p class="section-intro">One command installs everything and walks you through setup. Under the hood it's just restic + the AWS CLI + a launchd timer.</p>
+    <div class="steps">
+      <div class="step">
+        <h3>Install</h3>
+        <p>Clones backbot, installs <code>restic</code> + <code>awscli</code> via Homebrew, and links the <code>backbot</code> command.</p>
+      </div>
+      <div class="step">
+        <h3>Configure your AWS keys &amp; bucket</h3>
+        <p><code>backbot configure</code> stores your keys, creates the bucket if needed, generates an encryption password, and runs <code>restic init</code>.</p>
+      </div>
+      <div class="step">
+        <h3>Nightly backups, on autopilot</h3>
+        <p>launchd runs <code>backbot backup</code> at 23:59 and at login. Old snapshots are pruned automatically on a retention schedule.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="aws">
+    <h2>Bring your own AWS keys</h2>
+    <p class="section-intro">backbot never holds your credentials — you configure them right from the CLI. <code style="font-family:var(--mono);color:var(--accent)">backbot configure</code> is interactive and safe to re-run anytime to rotate keys or switch buckets.</p>
+    <div class="term">
+      <div class="bar"><span></span><span></span><span></span></div>
+<pre><span class="c-prompt">$</span> <span class="c-cmd">backbot configure</span>
+<span class="c-out">=== backbot configure ===</span>
+
+<span class="c-out">This stores your own AWS keys and points backbot at your S3 bucket.
+AWS keys are saved to a dedicated 'backbot' AWS CLI profile (~/.aws),
+never to this repo or the backup itself.</span>
+
+<span class="c-key">AWS Access Key ID:</span> AKIA••••••••••••••••
+<span class="c-key">AWS Secret Access Key:</span> ••••••••••••••••••••••••••••••••
+<span class="c-key">AWS region</span> [us-west-1]: <span class="c-cmd">us-west-1</span>
+<span class="c-out">Saved to AWS profile 'backbot'.</span>
+
+<span class="c-key">S3 bucket name for backups:</span> <span class="c-cmd">my-mac-backups</span>
+<span class="c-out">Bucket s3://my-mac-backups not accessible (may not exist yet).</span>
+<span class="c-key">Create it in us-west-1 now?</span> [y/N] <span class="c-cmd">y</span>
+<span class="c-out">Created s3://my-mac-backups</span>
+
+<span class="c-out">Generating restic repository password (stored in macOS Keychain)...</span>
+<span class="c-key">Storage class</span> [GLACIER_IR]: <span class="c-cmd">GLACIER_IR</span>
+<span class="c-out">Wrote ~/.config/backbot/restic.conf</span>
+<span class="c-key">Initialize restic repo now?</span> [Y/n] <span class="c-cmd">y</span>
+<span class="c-out">Repo initialized.</span>
+
+<span class="c-out">Done. Run your first backup with:</span>  <span class="c-cmd">backbot backup</span></pre>
+    </div>
+    <div class="note"><b>You stay in control.</b> Keys are written to a dedicated <code style="font-family:var(--mono)">backbot</code> AWS CLI profile in <code style="font-family:var(--mono)">~/.aws</code>, never committed and never uploaded. Prefer your own setup? Any AWS credential source works — set <code style="font-family:var(--mono)">AWS_PROFILE</code> and <code style="font-family:var(--mono)">RESTIC_REPOSITORY</code> in the config and skip <code style="font-family:var(--mono)">configure</code>.</div>
+  </section>
+
+  <section id="cli">
+    <h2>CLI reference</h2>
+    <p class="section-intro">restic's power, wrapped in a handful of friendly commands. Pass-through subcommands forward straight to restic.</p>
+    <table class="cmds">
+      <tr><td><code>backbot configure</code></td><td>Set up AWS keys, bucket, repo password, init the repo</td></tr>
+      <tr><td><code>backbot backup</code></td><td>Incremental backup, then apply retention</td></tr>
+      <tr><td><code>backbot snapshots</code></td><td>List all snapshots</td></tr>
+      <tr><td><code>backbot restore</code></td><td>Restore files to a target directory</td></tr>
+      <tr><td><code>backbot mount &lt;dir&gt;</code></td><td>Browse the repo like a folder (FUSE)</td></tr>
+      <tr><td><code>backbot check</code></td><td>Verify repository integrity</td></tr>
+      <tr><td><code>backbot status</code></td><td>Config, latest snapshot, schedule, logs</td></tr>
+      <tr><td><code>backbot uninstall</code></td><td>Remove the launchd job and CLI</td></tr>
+    </table>
+  </section>
+
+  <section id="cost">
+    <h2>What it costs</h2>
+    <p class="section-intro">You pay AWS directly — there's no backbot subscription. For ~500 GB:</p>
+    <div class="cost">
+      <div class="c"><div class="big accent">~$8</div><div class="lbl">/ year — Deep Archive</div></div>
+      <div class="c"><div class="big">~$24</div><div class="lbl">/ year — Glacier IR (default)</div></div>
+      <div class="c"><div class="big">$0</div><div class="lbl">backbot itself — it's free &amp; open source</div></div>
+    </div>
+  </section>
+
+  <footer>
+    <div>Free &amp; open source · MIT · made by <a href="https://viraat.dev">viraat</a></div>
+    <div><a href="https://github.com/viraatdas/backbot">github.com/viraatdas/backbot ↗</a></div>
+  </footer>
+
+</div>
+
+<script>
+  function copyInstall() {
+    var text = document.getElementById('install').textContent;
+    var btn = document.getElementById('copyBtn');
+    navigator.clipboard.writeText(text).then(function () {
+      btn.textContent = 'Copied ✓';
+      btn.classList.add('copied');
+      setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,8 +1,8 @@
 # backbot
 
-Nightly Mac backup to S3 Glacier Deep Archive. ~$8/year for 500GB.
+Nightly Mac backup to Amazon S3 Glacier, powered by [restic](https://restic.net). End-to-end encrypted, deduplicated, incremental. ~$8/year for 500 GB.
 
-Uses `duplicity` for incremental, encrypted, tar-based backups — fewer S3 PUTs, local signature cache (never reads from Glacier), GPG encryption built in.
+Defaults to the **Glacier Instant Retrieval** storage class — cheap *and* restorable in seconds (no thaw wait), which keeps restic's metadata reads fast.
 
 ## Install
 
@@ -11,17 +11,16 @@ curl -fsSL https://raw.githubusercontent.com/viraatdas/backbot/main/install.sh |
 ```
 
 This will:
-- Clone backbot to `~/.backbot/`
-- Install dependencies via Homebrew (`duplicity`, `gnupg`, `awscli`, `terminal-notifier`)
-- Generate an encryption passphrase and store it in macOS Keychain
-- Prompt for your S3 bucket name
-- Set up the nightly launchd job (11:59 PM)
-- Add `backbot` to your PATH (`~/.local/bin/`)
+
+- Clone backbot to `~/.backbot/` and symlink `backbot` into `~/.local/bin/`
+- Install dependencies via Homebrew (`restic`, `awscli`, `terminal-notifier`)
+- Run `backbot configure` — set your AWS keys, S3 bucket, repo password, and init the repo
+- Install the nightly launchd job (11:59 PM **and at every login**)
 
 Then run your first backup:
 
 ```bash
-backbot backup --full
+backbot backup
 ```
 
 To uninstall:
@@ -30,145 +29,113 @@ To uninstall:
 backbot uninstall
 ```
 
+## Configure your AWS keys
+
+backbot uses **your own** AWS account and bucket. `backbot configure` walks you through it:
+
+```bash
+backbot configure
+```
+
+It will:
+
+1. Prompt for your **AWS Access Key ID / Secret Access Key / region** and save them to a dedicated `backbot` AWS CLI profile (`~/.aws/credentials`) — never inside this repo or the backup.
+2. Ask for your **S3 bucket** and offer to create it if it doesn't exist.
+3. Generate a **restic repository password** and store it in the macOS Keychain.
+4. Run `restic init` to set up the encrypted repository.
+
+Re-run it anytime to rotate keys or point at a different bucket — it only changes what you confirm.
+
+Prefer to manage credentials yourself? Any standard AWS credential source works (`aws configure`, env vars, SSO, instance roles). Just set `AWS_PROFILE` (or leave it for the default profile) and `RESTIC_REPOSITORY` in `~/.config/backbot/restic.conf`.
+
+> **Minimal IAM permissions** for the backup user: `s3:ListBucket`, `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` on the bucket (plus `s3:CreateBucket` if you want backbot to create it).
+
 ## CLI Reference
 
-### `backbot backup`
+| Command | What it does |
+|---------|--------------|
+| `backbot configure` | Set up AWS keys, bucket, repo password, and init the repo |
+| `backbot backup` | Incremental backup, then apply retention (forget; prune on Sundays) |
+| `backbot snapshots` | List snapshots |
+| `backbot ls <snap-id> [path]` | List files inside a snapshot |
+| `backbot restore <snap-id> --target <dir> [--include <path>]` | Restore files |
+| `backbot mount <dir>` | FUSE-mount the repo and browse it like a folder |
+| `backbot diff <a> <b>` | Diff two snapshots |
+| `backbot check` | Verify repository integrity |
+| `backbot forget` / `prune` | Manual retention / space reclaim |
+| `backbot stats` | Repository size stats |
+| `backbot status` | Config, latest snapshot, launchd state, recent logs |
+| `backbot uninstall` | Remove the launchd job and wrapper |
+| `backbot version` | Show version |
 
-Run an incremental backup. Only uploads changes since the last backup. Automatically does a full backup if none exists or if the last full is older than 1 month.
+Pass-through subcommands (`snapshots`, `ls`, `restore`, `mount`, `diff`, `check`, `forget`, `prune`, `stats`) forward their arguments straight to `restic`.
 
-```bash
-backbot backup          # incremental (fast, daily use)
-backbot backup --full   # force a full backup
-```
+### Restore example
 
-On success, sends a macOS notification and cleans up old backup sets. Logs are saved to `~/.local/share/backbot/logs/`.
-
-### `backbot list`
-
-Show all available backup snapshots (full and incremental chains) stored in S3.
-
-```bash
-backbot list
-```
-
-### `backbot status`
-
-Quick health check — shows last backup time, log tail, duplicity cache size, and whether the nightly schedule is active.
-
-```bash
-backbot status
-```
-
-### `backbot restore`
-
-Restore files from backup. Since Glacier Deep Archive requires a thaw period, this is a two-step process:
+Because Glacier IR is instantly retrievable, restores are immediate:
 
 ```bash
-# Step 1: Initiate Glacier thaw (Bulk tier: 12-48 hours)
-backbot restore Documents/important.txt
-
-# Step 2: After thaw completes, download and decrypt
-backbot restore --continue
+backbot snapshots                                  # find the snapshot id
+backbot restore <snap-id> --target ~/restored \
+    --include /Users/you/Documents/important.txt
 ```
-
-Options:
-
-```bash
-# Restore from a specific point in time
-backbot restore Documents/ --time 2025-06-15
-
-# Restore to a custom directory (default: /tmp/backbot-restore)
-backbot restore Documents/ --dest ~/Desktop/restored
-
-# Use Standard thaw tier (3-5 hours instead of 12-48, costs more)
-backbot restore Documents/ --expedite
-```
-
-### `backbot install`
-
-Run first-time setup: installs Homebrew dependencies, creates config, generates encryption passphrase, stores it in macOS Keychain, sets up the nightly launchd job.
-
-```bash
-backbot install
-```
-
-### `backbot uninstall`
-
-Remove the launchd job and optionally clean up config, logs, and Keychain entry. Does NOT delete your S3 backup data.
-
-```bash
-backbot uninstall
-```
-
-### `backbot help`
-
-Show available commands.
-
-### `backbot version`
-
-Print version number.
 
 ## Schedule
 
-Runs nightly at 23:59 via launchd. If your Mac is asleep at that time, launchd runs the job on wake.
+Runs nightly at **23:59** and **at every login** via launchd. If your Mac is asleep at 23:59, launchd runs the job on wake.
 
 ```bash
-# Check if scheduled
-launchctl list | grep backbot
+launchctl list | grep backbot      # is it loaded?
 
-# Manually load/unload
+# manually load / unload
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.backbot.nightly.plist
-launchctl bootout gui/$(id -u)/com.backbot.nightly
+launchctl bootout   gui/$(id -u)/com.backbot.nightly
 ```
 
 ## File Layout
 
 ```
-~/.config/backbot/backbot.conf    # Configuration
-~/.config/backbot/exclude.list    # Exclusion patterns
-~/.local/share/backbot/logs/      # Backup logs
-~/.cache/duplicity/               # Duplicity signature cache (DO NOT DELETE)
+~/.config/backbot/restic.conf     # configuration (written by `backbot configure`)
+~/.config/backbot/exclude.list    # exclusion patterns
+~/.local/share/backbot/logs/      # backup logs
+~/.aws/credentials                # AWS keys (profile: backbot)
+macOS Keychain                    # restic repo password (service: backbot-restic)
 ```
-
-## Cost Breakdown
-
-| Item | Annual Cost |
-|------|-------------|
-| Storage (500GB Deep Archive @ $0.00099/GB/mo) | ~$6 |
-| PUT requests (monthly full + daily incrementals) | ~$1-2 |
-| **Total** | **~$7-8/year** |
-| Restore (Bulk tier, if needed) | ~$46 per full restore |
 
 ## Configuration
 
-Edit `~/.config/backbot/backbot.conf`:
+`~/.config/backbot/restic.conf`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `S3_BUCKET` | — | Your S3 bucket name |
-| `S3_REGION` | `us-west-1` | AWS region |
-| `FULL_IF_OLDER_THAN` | `1M` | Force full backup interval |
-| `REMOVE_OLDER_THAN` | `12M` | Delete full backups older than this |
-| `VOLSIZE` | `250` | Tar volume size in MB |
-| `GPG_MODE` | `keychain` | `keychain` or `env` |
+| `RESTIC_REPOSITORY` | — | `s3:s3.<region>.amazonaws.com/<bucket>` |
+| `AWS_PROFILE` | `backbot` | AWS CLI profile holding your keys |
+| `BACKUP_SOURCE` | `$HOME` | Directory to back up |
+| `STORAGE_CLASS` | `GLACIER_IR` | `GLACIER_IR` (instant) or `DEEP_ARCHIVE` (cheapest, 12–48h thaw) |
+| `KEEP_LAST` / `KEEP_DAILY` / `KEEP_WEEKLY` / `KEEP_MONTHLY` | `3 / 7 / 4 / 12` | Retention policy |
+| `PRUNE_DAY` | `7` | Day (1–7) to run the heavier `forget --prune` |
 | `NOTIFY` | `terminal-notifier` | `terminal-notifier` or `none` |
-| `LOG_RETENTION_DAYS` | `90` | Auto-delete logs older than this |
+| `LOG_RETENTION_DAYS` | `90` | Auto-delete local logs older than this |
+
+## Cost Breakdown (500 GB)
+
+| Item | Annual Cost |
+|------|-------------|
+| Storage (Glacier IR @ ~$0.004/GB/mo) | ~$24 |
+| Storage (Deep Archive @ ~$0.00099/GB/mo) | ~$6 |
+| PUT/API requests | ~$1–2 |
+
+Glacier IR costs a bit more than Deep Archive but restores instantly. Set `STORAGE_CLASS="DEEP_ARCHIVE"` for the cheapest possible storage if you can tolerate a 12–48h thaw on restore.
+
+## Encryption & recovery
+
+restic encrypts everything client-side. The repository password lives in your macOS Keychain (`backbot-restic`). **Without it your backup cannot be decrypted — not even by you.** Save a copy somewhere safe:
+
+```bash
+security find-generic-password -s backbot-restic -a backbot -w
+```
 
 ## Troubleshooting
-
-**"Could not retrieve passphrase from Keychain"**
-Re-run `./install.sh` or manually add:
-```bash
-security add-generic-password -s backbot-gpg -a backbot -w "YOUR_PASSPHRASE"
-```
-
-**Backup fails with boto3 error**
-Homebrew's duplicity bundles boto3. If using a different install: `pip3 install boto3`
-
-**Launchd not running**
-```bash
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.backbot.nightly.plist
-```
 
 **Check logs**
 ```bash
@@ -176,20 +143,21 @@ ls -lt ~/.local/share/backbot/logs/
 tail -50 ~/.local/share/backbot/logs/backup-*.log
 ```
 
+**`Operation not permitted` while reading files**
+macOS Full Disk Access. Grant it to whatever runs backbot (Terminal, or the launchd context):
+System Settings → Privacy & Security → Full Disk Access.
+
+**Launchd not running**
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.backbot.nightly.plist
+```
+
 ## What Gets Backed Up
 
-Your entire home directory, minus caches and build artifacts. Key exclusions:
+Your entire home directory, minus caches and build artifacts (`node_modules`, `.git`, `__pycache__`, `build/`, `dist/`, `~/Library/Caches`, Docker data, VM images, etc.). Edit `~/.config/backbot/exclude.list` to adjust.
 
-- `node_modules`, `.git`, `__pycache__`, `build/`, `dist/`
-- `~/Library/Caches`, `~/Library/Logs`, `~/Library/Developer`
-- `.cache`, `.npm`, `.yarn/cache`, `.cargo/registry`
-- Docker data, Steam games, browser caches
-- Virtual machines (`.vmdk`, `.vdi`, `.qcow2`)
+`--exclude-caches` also skips any directory tagged with a `CACHEDIR.TAG` file.
 
-Your macOS preferences (keyboard shortcuts, app settings, etc.) in `~/Library/Preferences/` **are** included.
+## Why restic + Glacier Instant Retrieval?
 
-Edit exclusions: `~/.config/backbot/exclude.list`
-
-## Why duplicity over restic/kopia?
-
-restic and kopia store metadata as individual objects that need frequent reads. With Glacier Deep Archive, reading metadata requires a 12-48hr thaw cycle, making these tools unusable. duplicity stores everything as tar archives with a local signature cache — it never needs to read back from S3 during normal backups.
+restic gives you deduplication, client-side encryption, and snapshot browsing/mounting out of the box. Glacier IR keeps storage cheap while staying instantly restorable — so restic's periodic metadata reads (and your restores) never hit a multi-hour thaw, unlike Deep Archive.

@@ -1,0 +1,35 @@
+# backbot config — copy to ~/.config/backbot/restic.conf
+# (normally written for you by `backbot configure`)
+
+# S3 repository, in restic's s3: form:
+#   s3:s3.<region>.amazonaws.com/<bucket>
+RESTIC_REPOSITORY="s3:s3.us-west-1.amazonaws.com/your-backup-bucket"
+
+# How restic gets the repo encryption password (macOS Keychain by default).
+RESTIC_PASSWORD_COMMAND="security find-generic-password -s backbot-restic -a backbot -w"
+
+# Dedicated AWS CLI profile holding your access keys (kept in ~/.aws, not here).
+AWS_PROFILE="backbot"
+
+# What to back up.
+BACKUP_SOURCE="$HOME"
+
+# S3 storage class for uploaded objects.
+#   GLACIER_IR    — Glacier Instant Retrieval, instant restore, cheap (default)
+#   DEEP_ARCHIVE  — cheapest, but 12–48h thaw before restore
+STORAGE_CLASS="GLACIER_IR"
+
+# Retention (applied via `restic forget` after each backup).
+KEEP_LAST=3
+KEEP_DAILY=7
+KEEP_WEEKLY=4
+KEEP_MONTHLY=12
+
+# Day of week (1=Mon … 7=Sun) to run the heavier forget --prune.
+PRUNE_DAY=7
+
+# Notifications: "terminal-notifier" or "none"
+NOTIFY="terminal-notifier"
+
+# Delete local logs older than this many days.
+LOG_RETENTION_DAYS=90

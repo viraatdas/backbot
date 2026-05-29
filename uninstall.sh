@@ -50,10 +50,14 @@ if [[ "${answer:-N}" =~ ^[Yy]$ ]]; then
 fi
 
 # ── Optional: remove Keychain entry ───────────────────────────────────
-read -rp "Remove GPG passphrase from Keychain? [y/N] " answer
+read -rp "Remove restic repo password from Keychain? [y/N] " answer
 if [[ "${answer:-N}" =~ ^[Yy]$ ]]; then
-    security delete-generic-password -s "backbot-gpg" -a "backbot" 2>/dev/null || true
-    echo "  Removed"
+    echo "WARNING: without this password your S3 backup is unrecoverable."
+    read -rp "Really delete it? [y/N] " confirm
+    if [[ "${confirm:-N}" =~ ^[Yy]$ ]]; then
+        security delete-generic-password -s "backbot-restic" -a "backbot" 2>/dev/null || true
+        echo "  Removed"
+    fi
 fi
 
 echo
@@ -68,4 +72,4 @@ fi
 
 echo
 echo "Note: Your S3 backup data was NOT removed."
-echo "Note: Duplicity cache (~/.cache/duplicity) was NOT removed."
+echo "Note: Your AWS 'backbot' profile (~/.aws) was NOT removed."

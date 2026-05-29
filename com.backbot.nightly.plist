@@ -31,6 +31,6 @@
     <string>/Users/viraat/.local/share/backbot/logs/launchd-stderr.log</string>
 
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
 </dict>
 </plist>
