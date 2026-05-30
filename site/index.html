@@ -11,19 +11,17 @@
 <meta property="og:url" content="https://backbot.viraat.dev" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --bg: #0a0c10;
-    --bg-soft: #11141b;
-    --panel: #141821;
-    --line: #232936;
-    --text: #e7ebf2;
-    --muted: #8a93a6;
-    --dim: #5d6677;
-    --accent: #6ee7a8;
-    --accent-2: #7aa2ff;
-    --amber: #f5c451;
+    --bg: #ffffff;
+    --bg-soft: #fafafa;
+    --panel: #ffffff;
+    --line: #e6e6e6;
+    --line-soft: #efefef;
+    --text: #111111;
+    --muted: #5c5c5c;
+    --dim: #8a8a8a;
     --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
@@ -33,161 +31,142 @@
     background: var(--bg);
     color: var(--text);
     font-family: var(--sans);
-    line-height: 1.6;
+    font-weight: 300;
+    line-height: 1.65;
     -webkit-font-smoothing: antialiased;
-    background-image:
-      radial-gradient(900px 500px at 80% -10%, rgba(122,162,255,0.10), transparent 60%),
-      radial-gradient(800px 500px at 10% 0%, rgba(110,231,168,0.08), transparent 55%);
-    background-repeat: no-repeat;
   }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
-  a { color: var(--accent-2); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--line); }
+  a:hover { border-bottom-color: var(--text); }
 
   /* nav */
   nav {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 22px 0; border-bottom: 1px solid var(--line);
+    padding: 24px 0; border-bottom: 1px solid var(--line);
   }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.01em; }
-  .brand .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent);
-    box-shadow: 0 0 14px var(--accent); }
-  .brand code { font-family: var(--mono); font-size: 1.05rem; color: var(--text); }
-  .nav-links { display: flex; gap: 22px; font-size: 0.92rem; }
-  .nav-links a { color: var(--muted); }
-  .nav-links a:hover { color: var(--text); text-decoration: none; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 400; letter-spacing: 0; }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text); }
+  .brand code { font-family: var(--mono); font-size: 1.02rem; color: var(--text); font-weight: 400; }
+  .nav-links { display: flex; gap: 24px; font-size: 0.9rem; }
+  .nav-links a { color: var(--muted); border-bottom: none; }
+  .nav-links a:hover { color: var(--text); }
 
   /* hero */
-  header { padding: 84px 0 56px; }
+  header { padding: 88px 0 60px; }
   .eyebrow {
-    font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.12em;
-    text-transform: uppercase; color: var(--accent); margin-bottom: 20px;
+    font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--dim); margin-bottom: 24px; font-weight: 400;
   }
   h1 {
-    font-size: clamp(2.4rem, 6vw, 3.8rem); line-height: 1.05;
-    letter-spacing: -0.03em; font-weight: 700; margin-bottom: 22px;
+    font-size: clamp(2.3rem, 5.5vw, 3.6rem); line-height: 1.1;
+    letter-spacing: -0.02em; font-weight: 200; margin-bottom: 24px; color: var(--text);
   }
-  h1 .grad {
-    background: linear-gradient(100deg, var(--accent), var(--accent-2));
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
-  .lede { font-size: 1.2rem; color: var(--muted); max-width: 620px; }
-  .lede strong { color: var(--text); font-weight: 600; }
+  .lede { font-size: 1.15rem; color: var(--muted); max-width: 620px; font-weight: 300; }
+  .lede strong { color: var(--text); font-weight: 400; }
 
   /* install command */
   .cmd {
-    margin: 36px 0 14px; display: flex; align-items: stretch;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    margin: 38px 0 14px; display: flex; align-items: stretch;
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 8px;
     overflow: hidden; max-width: 640px;
   }
   .cmd .prompt {
-    font-family: var(--mono); font-size: 0.92rem; padding: 16px 18px;
+    font-family: var(--mono); font-size: 0.9rem; font-weight: 400; padding: 15px 18px;
     display: flex; align-items: center; gap: 12px; flex: 1; overflow-x: auto; white-space: nowrap;
+    color: var(--text);
   }
-  .cmd .prompt .sigil { color: var(--accent); user-select: none; }
+  .cmd .prompt .sigil { color: var(--dim); user-select: none; }
   .cmd button {
-    font-family: var(--sans); font-size: 0.82rem; font-weight: 600;
-    border: none; border-left: 1px solid var(--line); background: var(--bg-soft);
+    font-family: var(--sans); font-size: 0.8rem; font-weight: 400;
+    border: none; border-left: 1px solid var(--line); background: var(--bg);
     color: var(--muted); padding: 0 18px; cursor: pointer; transition: color .15s, background .15s;
   }
-  .cmd button:hover { color: var(--text); background: #1a1f2a; }
-  .cmd button.copied { color: var(--accent); }
-  .sub { font-size: 0.9rem; color: var(--dim); }
+  .cmd button:hover { color: var(--text); background: var(--bg-soft); }
+  .cmd button.copied { color: var(--text); }
+  .sub { font-size: 0.88rem; color: var(--dim); }
   .sub code { font-family: var(--mono); color: var(--muted); }
 
   /* sections */
-  section { padding: 52px 0; border-top: 1px solid var(--line); }
-  h2 { font-size: 1.7rem; letter-spacing: -0.02em; margin-bottom: 10px; }
-  .section-intro { color: var(--muted); max-width: 640px; margin-bottom: 30px; }
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 1.55rem; letter-spacing: -0.01em; margin-bottom: 10px; font-weight: 300; }
+  .section-intro { color: var(--muted); max-width: 640px; margin-bottom: 32px; font-weight: 300; }
 
   /* feature grid */
-  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  .card {
-    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px;
-    padding: 22px 22px 20px;
-  }
-  .card h3 { font-size: 1.02rem; margin-bottom: 6px; display: flex; align-items: center; gap: 9px; }
-  .card h3 .ic { color: var(--accent); font-family: var(--mono); font-size: 0.95rem; }
-  .card p { font-size: 0.94rem; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .card { background: var(--bg); padding: 24px; }
+  .card h3 { font-size: 1rem; margin-bottom: 7px; display: flex; align-items: center; gap: 9px; font-weight: 400; }
+  .card h3 .ic { font-size: 0.95rem; opacity: .8; }
+  .card p { font-size: 0.92rem; color: var(--muted); font-weight: 300; }
 
   /* steps */
-  .steps { counter-reset: step; display: flex; flex-direction: column; gap: 14px; }
-  .step {
-    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px;
-    padding: 18px 20px 18px 60px; position: relative;
-  }
+  .steps { counter-reset: step; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .step { background: var(--bg); padding: 20px 22px 20px 62px; position: relative; }
   .step::before {
     counter-increment: step; content: counter(step);
-    position: absolute; left: 18px; top: 18px;
-    width: 28px; height: 28px; border-radius: 8px;
-    background: rgba(110,231,168,0.12); color: var(--accent);
-    border: 1px solid rgba(110,231,168,0.3);
+    position: absolute; left: 20px; top: 20px;
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid var(--line);
     display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-weight: 600; font-size: 0.9rem;
+    font-family: var(--mono); font-weight: 400; font-size: 0.82rem; color: var(--muted);
   }
-  .step h3 { font-size: 1rem; margin-bottom: 3px; }
-  .step p { font-size: 0.92rem; color: var(--muted); }
-  .step code { font-family: var(--mono); font-size: 0.85em; background: var(--panel);
-    border: 1px solid var(--line); padding: 1px 6px; border-radius: 5px; color: var(--text); }
+  .step h3 { font-size: 0.98rem; margin-bottom: 3px; font-weight: 400; }
+  .step p { font-size: 0.9rem; color: var(--muted); font-weight: 300; }
+  .step code { font-family: var(--mono); font-size: 0.84em; background: var(--bg-soft);
+    border: 1px solid var(--line); padding: 1px 6px; border-radius: 4px; color: var(--text); }
 
   /* terminal block */
   .term {
-    background: #0c0e13; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 8px;
     overflow: hidden; margin-top: 8px;
   }
   .term .bar {
     display: flex; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--line);
-    background: var(--bg-soft);
+    background: var(--bg);
   }
-  .term .bar span { width: 11px; height: 11px; border-radius: 50%; background: #2c3340; }
-  .term .bar span:nth-child(1) { background: #ff5f57; }
-  .term .bar span:nth-child(2) { background: #febc2e; }
-  .term .bar span:nth-child(3) { background: #28c840; }
+  .term .bar span { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 1px solid var(--line); }
   .term pre {
-    font-family: var(--mono); font-size: 0.86rem; line-height: 1.7;
+    font-family: var(--mono); font-size: 0.84rem; line-height: 1.7; font-weight: 400;
     padding: 18px 20px; overflow-x: auto; color: var(--text);
   }
-  .term .c-prompt { color: var(--accent); }
+  .term .c-prompt { color: var(--dim); }
   .term .c-cmd { color: var(--text); }
   .term .c-out { color: var(--muted); }
-  .term .c-key { color: var(--amber); }
+  .term .c-key { color: var(--text); font-weight: 400; }
 
   /* commands table */
-  .cmds { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
-  .cmds td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .cmds { width: 100%; border-collapse: collapse; font-size: 0.92rem; font-weight: 300; }
+  .cmds td { padding: 11px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
   .cmds tr:last-child td { border-bottom: none; }
   .cmds td:first-child { white-space: nowrap; width: 1%; }
-  .cmds code { font-family: var(--mono); color: var(--accent); font-size: 0.86rem; }
+  .cmds code { font-family: var(--mono); color: var(--text); font-size: 0.85rem; font-weight: 400; }
   .cmds td:last-child { color: var(--muted); }
 
   .note {
-    margin-top: 22px; font-size: 0.9rem; color: var(--muted);
-    background: rgba(245,196,81,0.06); border: 1px solid rgba(245,196,81,0.22);
-    border-radius: 10px; padding: 14px 16px;
+    margin-top: 24px; font-size: 0.9rem; color: var(--muted); font-weight: 300;
+    background: var(--bg-soft); border: 1px solid var(--line);
+    border-radius: 8px; padding: 16px 18px;
   }
-  .note b { color: var(--amber); }
+  .note b { color: var(--text); font-weight: 400; }
+  .note code { font-family: var(--mono); color: var(--text); }
 
   /* cost */
-  .cost { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
-  .cost .c {
-    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px;
-    padding: 22px; text-align: center;
-  }
-  .cost .c .big { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
-  .cost .c .big.accent { color: var(--accent); }
-  .cost .c .lbl { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+  .cost { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .cost .c { background: var(--bg); padding: 26px; text-align: center; }
+  .cost .c .big { font-size: 2rem; font-weight: 200; letter-spacing: -0.02em; }
+  .cost .c .lbl { font-size: 0.82rem; color: var(--muted); margin-top: 6px; font-weight: 300; }
 
   footer {
-    border-top: 1px solid var(--line); padding: 40px 0 60px;
-    color: var(--dim); font-size: 0.9rem; display: flex;
-    justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    border-top: 1px solid var(--line); padding: 40px 0 64px;
+    color: var(--dim); font-size: 0.88rem; display: flex;
+    justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; font-weight: 300;
   }
-  footer a { color: var(--muted); }
+  footer a { color: var(--muted); border-bottom: none; }
+  footer a:hover { color: var(--text); }
 
   @media (max-width: 640px) {
     .grid, .cost { grid-template-columns: 1fr; }
     .nav-links a:not(.gh) { display: none; }
-    header { padding: 56px 0 40px; }
+    header { padding: 56px 0 44px; }
   }
 </style>
 </head>
@@ -206,7 +185,7 @@
 
   <header>
     <div class="eyebrow">nightly mac backups · your bucket · your keys</div>
-    <h1>Back up your Mac to <span class="grad">S3 Glacier</span>,<br />automatically, every night.</h1>
+    <h1>Back up your Mac to S3 Glacier,<br />automatically, every night.</h1>
     <p class="lede">backbot is a tiny CLI that snapshots your home directory to <strong>your own</strong> S3 Glacier bucket every night — <strong>end-to-end encrypted</strong> with restic, deduplicated, and restorable in seconds. About <strong>$8 a year</strong>.</p>
 
     <div class="cmd">
@@ -258,7 +237,7 @@
 
   <section id="aws">
     <h2>Bring your own AWS keys</h2>
-    <p class="section-intro">backbot never holds your credentials — you configure them right from the CLI. <code style="font-family:var(--mono);color:var(--accent)">backbot configure</code> is interactive and safe to re-run anytime to rotate keys or switch buckets.</p>
+    <p class="section-intro">backbot never holds your credentials — you configure them right from the CLI. <code style="font-family:var(--mono)">backbot configure</code> is interactive and safe to re-run anytime to rotate keys or switch buckets.</p>
     <div class="term">
       <div class="bar"><span></span><span></span><span></span></div>
 <pre><span class="c-prompt">$</span> <span class="c-cmd">backbot configure</span>
@@ -286,7 +265,7 @@ never to this repo or the backup itself.</span>
 
 <span class="c-out">Done. Run your first backup with:</span>  <span class="c-cmd">backbot backup</span></pre>
     </div>
-    <div class="note"><b>You stay in control.</b> Keys are written to a dedicated <code style="font-family:var(--mono)">backbot</code> AWS CLI profile in <code style="font-family:var(--mono)">~/.aws</code>, never committed and never uploaded. Prefer your own setup? Any AWS credential source works — set <code style="font-family:var(--mono)">AWS_PROFILE</code> and <code style="font-family:var(--mono)">RESTIC_REPOSITORY</code> in the config and skip <code style="font-family:var(--mono)">configure</code>.</div>
+    <div class="note"><b>You stay in control.</b> Keys are written to a dedicated <code>backbot</code> AWS CLI profile in <code>~/.aws</code>, never committed and never uploaded. Prefer your own setup? Any AWS credential source works — set <code>AWS_PROFILE</code> and <code>RESTIC_REPOSITORY</code> in the config and skip <code>configure</code>.</div>
   </section>
 
   <section id="cli">
@@ -308,7 +287,7 @@ never to this repo or the backup itself.</span>
     <h2>What it costs</h2>
     <p class="section-intro">You pay AWS directly — there's no backbot subscription. For ~500 GB:</p>
     <div class="cost">
-      <div class="c"><div class="big accent">~$8</div><div class="lbl">/ year — Deep Archive</div></div>
+      <div class="c"><div class="big">~$8</div><div class="lbl">/ year — Deep Archive</div></div>
       <div class="c"><div class="big">~$24</div><div class="lbl">/ year — Glacier IR (default)</div></div>
       <div class="c"><div class="big">$0</div><div class="lbl">backbot itself — it's free &amp; open source</div></div>
     </div>
