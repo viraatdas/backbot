@@ -56,25 +56,30 @@ cmd_backup() {
         echo "class:  $STORAGE_CLASS"
         echo
 
+        # Capture restic's exit code without letting `set -e` abort on it.
+        # restic returns 3 when some source files were unreadable (e.g. iCloud
+        # bundles with "resource deadlock avoided") — that's a successful backup.
+        local rc=0
         restic backup "$BACKUP_SOURCE" \
             --exclude-file="$EXCLUDE_FILE" \
             --exclude-caches \
             --tag nightly \
-            -o s3.storage-class="$STORAGE_CLASS" 2>&1
-        local rc=$?
+            -o s3.storage-class="$STORAGE_CLASS" 2>&1 || rc=$?
 
         # restic exit codes: 0=clean, 3=completed with read warnings, other=failure
         if [[ $rc -eq 0 || $rc -eq 3 ]]; then
             local forget_args=(--keep-last "$KEEP_LAST" --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY")
 
             echo
+            local frc=0
             if [[ "$(date +%u)" == "$PRUNE_DAY" ]]; then
                 echo "=== weekly forget + prune ==="
-                restic forget "${forget_args[@]}" --prune -o s3.storage-class="$STORAGE_CLASS" 2>&1
+                restic forget "${forget_args[@]}" --prune -o s3.storage-class="$STORAGE_CLASS" 2>&1 || frc=$?
             else
                 echo "=== forget (no prune today) ==="
-                restic forget "${forget_args[@]}" 2>&1
+                restic forget "${forget_args[@]}" 2>&1 || frc=$?
             fi
+            [[ $frc -ne 0 ]] && echo "WARN: retention (forget) exited $frc — backup itself was fine"
 
             if [[ $rc -eq 3 ]]; then
                 notify "Backbot" "Backup complete (some files unreadable — see log)"
