@@ -8,6 +8,8 @@ CONFIG_DIR="$HOME/.config/backbot"
 LOG_DIR="$HOME/.local/share/backbot/logs"
 PLIST_NAME="com.backbot.nightly"
 PLIST_DEST="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
+MENUBAR_NAME="com.backbot.menubar"
+MENUBAR_DEST="$HOME/Library/LaunchAgents/$MENUBAR_NAME.plist"
 BIN_DIR="$HOME/.local/bin"
 
 echo "=== Backbot Installer (restic) ==="
@@ -89,6 +91,24 @@ sed -i '' "s|$HOME/.local/bin/backbot|$BIN_DIR/backbot|g" "$PLIST_DEST"
 launchctl bootout "gui/$(id -u)/$PLIST_NAME" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST_DEST"
 echo "Launchd job installed."
+echo
+
+# ── Menu bar app (optional, needs swiftc / Xcode CLT) ──────────────────
+if command -v swiftc &>/dev/null; then
+    echo "Building the menu bar app (BackbotBar)..."
+    if bash "$INSTALL_DIR/menubar/build.sh" "$INSTALL_DIR"; then
+        sed "s|/Users/viraat|$HOME|g" "$INSTALL_DIR/com.backbot.menubar.plist" > "$MENUBAR_DEST"
+        launchctl bootout "gui/$(id -u)/$MENUBAR_NAME" 2>/dev/null || true
+        launchctl bootstrap "gui/$(id -u)" "$MENUBAR_DEST"
+        launchctl kickstart "gui/$(id -u)/$MENUBAR_NAME" 2>/dev/null || true
+        echo "Menu bar app installed (starts at every login)."
+    else
+        echo "Menu bar build failed — skipping (backups still work)."
+    fi
+else
+    echo "swiftc not found — skipping the menu bar app."
+    echo "  Install Xcode Command Line Tools (xcode-select --install) and re-run to add it."
+fi
 echo
 
 # ── Done ─────────────────────────────────────────────────────────────────

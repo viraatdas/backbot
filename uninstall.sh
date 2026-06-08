@@ -3,6 +3,8 @@ set -euo pipefail
 
 PLIST_NAME="com.backbot.nightly"
 PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
+MENUBAR_NAME="com.backbot.menubar"
+MENUBAR_PATH="$HOME/Library/LaunchAgents/$MENUBAR_NAME.plist"
 SYMLINK_PATH="$HOME/.local/bin/backbot"
 INSTALL_DIR="$HOME/.backbot"
 CONFIG_DIR="$HOME/.config/backbot"
@@ -23,6 +25,19 @@ fi
 if [[ -f "$PLIST_PATH" ]]; then
     rm -f "$PLIST_PATH"
     echo "  Removed: $PLIST_PATH"
+fi
+echo
+
+# ── Unload menu bar app ────────────────────────────────────────────────
+if launchctl list 2>/dev/null | grep -q "$MENUBAR_NAME"; then
+    echo "Unloading menu bar app..."
+    launchctl bootout "gui/$(id -u)/$MENUBAR_NAME" 2>/dev/null || true
+    echo "  Unloaded"
+fi
+pkill -f BackbotBar 2>/dev/null || true
+if [[ -f "$MENUBAR_PATH" ]]; then
+    rm -f "$MENUBAR_PATH"
+    echo "  Removed: $MENUBAR_PATH"
 fi
 echo
 
