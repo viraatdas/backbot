@@ -94,10 +94,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             btn.toolTip = "backbot — " + (running ? "backing up…" : st.when)
         }
 
+        // Menu shows only the last backup time — nothing else.
         let menu = NSMenu()
         let title: String
         switch st.status {
-        case "ok", "warnings": title = "Last backup: \(st.when)  ✓"
+        case "ok", "warnings": title = "Last backup: \(st.when)"
         case "failed":         title = "Last backup FAILED: \(st.when)"
         case "partial":        title = "Last run incomplete: \(st.when)"
         default:               title = "No backups yet"
@@ -105,26 +106,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let head = NSMenuItem(title: running ? "Backing up now…" : title, action: nil, keyEquivalent: "")
         head.isEnabled = false
         menu.addItem(head)
-        if st.status == "warnings" {
-            let w = NSMenuItem(title: "Some files unreadable (open/iCloud) — normal", action: nil, keyEquivalent: "")
-            w.isEnabled = false
-            menu.addItem(w)
-        }
-        if !st.snap.isEmpty {
-            let s = NSMenuItem(title: "Snapshot \(st.snap)", action: nil, keyEquivalent: "")
-            s.isEnabled = false
-            menu.addItem(s)
-        }
-        menu.addItem(.separator())
-        add(menu, "Back up now", #selector(backupNow), "b", enabled: !running)
-        add(menu, "Show status…", #selector(showStatus), "s")
-        add(menu, "Open latest log", #selector(openLog), "")
-        add(menu, "Open logs folder", #selector(openLogsFolder), "")
-        menu.addItem(.separator())
-        add(menu, "backbot.viraat.dev", #selector(openSite), "")
-        add(menu, "GitHub", #selector(openGitHub), "")
-        menu.addItem(.separator())
-        add(menu, "Quit", #selector(quit), "q")
         statusItem.menu = menu
     }
 
