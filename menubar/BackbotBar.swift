@@ -17,6 +17,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Persist the user's chosen slot across launches: ⌘-drag it out from behind
+        // the notch once and macOS remembers the position forever.
+        statusItem.autosaveName = "BackbotBar"
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.refresh() }
     }
@@ -71,15 +74,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let running = backupRunning || resticRunning()
         let st = readState()
 
-        var symbol = "externaldrive.fill"
+        // Thin outline symbols rendered as a template image: the icon adapts to the
+        // menu bar appearance (light/thin black in Light mode, white in Dark mode).
+        // No color tint except red for an actual failure, so it stays clean and light.
+        var symbol = "externaldrive"
         var tint: NSColor? = nil
-        if running { symbol = "arrow.triangle.2.circlepath"; tint = .systemBlue }
-        else if st.status == "failed" { symbol = "externaldrive.fill.badge.xmark"; tint = .systemRed }
-        else if st.status == "ok" || st.status == "warnings" { symbol = "externaldrive.fill.badge.checkmark"; tint = .systemGreen }
+        if running { symbol = "arrow.triangle.2.circlepath" }
+        else if st.status == "failed" { symbol = "externaldrive.badge.xmark"; tint = .systemRed }
+        else if st.status == "ok" || st.status == "warnings" { symbol = "externaldrive.badge.checkmark" }
 
         if let btn = statusItem.button {
-            let img = NSImage(systemSymbolName: symbol, accessibilityDescription: "backbot")
-                ?? NSImage(systemSymbolName: "externaldrive.fill", accessibilityDescription: "backbot")
+            let cfg = NSImage.SymbolConfiguration(pointSize: 15, weight: .light)
+            let img = (NSImage(systemSymbolName: symbol, accessibilityDescription: "backbot")
+                ?? NSImage(systemSymbolName: "externaldrive", accessibilityDescription: "backbot"))?
+                .withSymbolConfiguration(cfg)
             img?.isTemplate = true
             btn.image = img
             btn.contentTintColor = tint
