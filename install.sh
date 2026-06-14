@@ -98,6 +98,10 @@ if command -v swiftc &>/dev/null; then
     echo "Building the menu bar app (BackbotBar)..."
     if bash "$INSTALL_DIR/menubar/build.sh" "$INSTALL_DIR"; then
         sed "s|/Users/viraat|$HOME|g" "$INSTALL_DIR/com.backbot.menubar.plist" > "$MENUBAR_DEST"
+        # The launchd agent is the ONLY autostart mechanism. Remove any stray
+        # "BackbotBar" login item so it can't be launched a second time at login
+        # (that double-launch is what spawned two menu bar icons).
+        osascript -e 'tell application "System Events" to delete (every login item whose name is "BackbotBar")' 2>/dev/null || true
         launchctl bootout "gui/$(id -u)/$MENUBAR_NAME" 2>/dev/null || true
         launchctl bootstrap "gui/$(id -u)" "$MENUBAR_DEST"
         launchctl kickstart "gui/$(id -u)/$MENUBAR_NAME" 2>/dev/null || true

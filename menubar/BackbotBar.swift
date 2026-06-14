@@ -144,6 +144,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+// Single-instance guard: if another copy is already running (e.g. started by a
+// second autostart mechanism), exit immediately so only one menu bar icon exists.
+let me = NSRunningApplication.current
+let bundleID = me.bundleIdentifier ?? "dev.viraat.backbot.menubar"
+let duplicates = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+    .filter { $0.processIdentifier != me.processIdentifier }
+if !duplicates.isEmpty {
+    exit(0)
+}
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)   // no Dock icon; menu bar only
 let delegate = AppDelegate()
