@@ -6,3 +6,5 @@ CLAUDE.md
 .netlify
 RUDDER.md
 .rudder/
+.rudder-worktrees/
+RUDDER_SHARED.md

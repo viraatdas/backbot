@@ -1,8 +1,13 @@
 // BackbotBar — a tiny native menu bar app for backbot.
 // Shows last-backup status and quick actions. No dependencies; pure Cocoa.
 // Build: see build.sh (compiles into BackbotBar.app, an LSUIElement agent).
+//
+// Autostart is a real Login Item (SMAppService), not a launchd plist, so it
+// shows up in System Settings › General › Login Items & Extensions under the
+// app's own name and icon rather than as an anonymous background executable.
 
 import Cocoa
+import ServiceManagement
 
 let HOME = FileManager.default.homeDirectoryForCurrentUser
 let LOG_DIR = HOME.appendingPathComponent(".local/share/backbot/logs")
@@ -10,12 +15,45 @@ let BACKBOT = HOME.appendingPathComponent(".local/bin/backbot").path
 
 struct BackupState { var status: String; var when: String; var snap: String }
 
+// ── Login item ───────────────────────────────────────────────────────────
+enum LoginItem {
+    /// Set once we've registered, so that turning the login item off in System
+    /// Settings sticks instead of being switched back on at the next launch.
+    private static let didRegisterKey = "didRegisterLoginItem"
+
+    static func registerIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: didRegisterKey) else { return }
+        do {
+            if SMAppService.mainApp.status != .enabled {
+                try SMAppService.mainApp.register()
+            }
+            UserDefaults.standard.set(true, forKey: didRegisterKey)
+        } catch {
+            NSLog("backbot: could not register login item: \(error.localizedDescription)")
+        }
+    }
+
+    static func register() throws {
+        try SMAppService.mainApp.register()
+        UserDefaults.standard.set(true, forKey: didRegisterKey)
+    }
+
+    static func unregister() throws {
+        try SMAppService.mainApp.unregister()
+        UserDefaults.standard.set(false, forKey: didRegisterKey)
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var timer: Timer?
+    var spinner: Timer?
+    var spinPhase: CGFloat = 0
     var backupRunning = false
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        LoginItem.registerIfNeeded()
+
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         // Persist the user's chosen slot across launches: ⌘-drag it out from behind
         // the notch once and macOS remembers the position forever.
@@ -74,24 +112,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let running = backupRunning || resticRunning()
         let st = readState()
 
-        // Thin outline symbols rendered as a template image: the icon adapts to the
-        // menu bar appearance (light/thin black in Light mode, white in Dark mode).
-        // No color tint except red for an actual failure, so it stays clean and light.
-        var symbol = "externaldrive"
+        // The bot mark, drawn as a template image so it adapts to the menu bar
+        // appearance (black in Light mode, white in Dark). No colour except red
+        // for an actual failure, so it stays clean and light.
+        var badge: BackbotBadge = .none
         var tint: NSColor? = nil
-        if running { symbol = "arrow.triangle.2.circlepath" }
-        else if st.status == "failed" { symbol = "externaldrive.badge.xmark"; tint = .systemRed }
-        else if st.status == "ok" || st.status == "warnings" { symbol = "externaldrive.badge.checkmark" }
+        if running { badge = .running(phase: spinPhase) }
+        else if st.status == "failed" { badge = .failed; tint = .systemRed }
+        else if st.status == "ok" || st.status == "warnings" { badge = .ok }
 
         if let btn = statusItem.button {
-            let cfg = NSImage.SymbolConfiguration(pointSize: 15, weight: .light)
-            let img = (NSImage(systemSymbolName: symbol, accessibilityDescription: "backbot")
-                ?? NSImage(systemSymbolName: "externaldrive", accessibilityDescription: "backbot"))?
-                .withSymbolConfiguration(cfg)
-            img?.isTemplate = true
-            btn.image = img
+            btn.image = BackbotMark.statusImage(pointSize: 18, badge: badge)
             btn.contentTintColor = tint
             btn.toolTip = "backbot — " + (running ? "backing up…" : st.when)
+        }
+
+        // A rotating arc is what reads as "busy" at menu bar size; the arrowhead
+        // shape alone is a couple of pixels and says nothing.
+        if running && spinner == nil {
+            spinner = Timer.scheduledTimer(withTimeInterval: 1.0 / 12, repeats: true) { [weak self] _ in
+                guard let self, let btn = self.statusItem.button else { return }
+                self.spinPhase += 1.0 / 12
+                if self.spinPhase > 1 { self.spinPhase -= 1 }
+                btn.image = BackbotMark.statusImage(pointSize: 18,
+                                                    badge: .running(phase: self.spinPhase))
+            }
+        } else if !running {
+            spinner?.invalidate(); spinner = nil
         }
 
         // Menu shows only the last backup time — nothing else.
@@ -144,18 +191,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// Single-instance guard: if another copy is already running (e.g. started by a
-// second autostart mechanism), exit immediately so only one menu bar icon exists.
-let me = NSRunningApplication.current
-let bundleID = me.bundleIdentifier ?? "dev.viraat.backbot.menubar"
-let duplicates = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
-    .filter { $0.processIdentifier != me.processIdentifier }
-if !duplicates.isEmpty {
-    exit(0)
-}
+@main
+struct BackbotBarApp {
+    static func main() {
+        // Headless flags, so install.sh / uninstall.sh can manage the login
+        // item without needing to drive System Settings.
+        let args = CommandLine.arguments
+        if args.contains("--register-login-item") {
+            do { try LoginItem.register(); print("login item registered") }
+            catch { print("login item registration failed: \(error.localizedDescription)"); exit(1) }
+            exit(0)
+        }
+        if args.contains("--unregister-login-item") {
+            do { try LoginItem.unregister(); print("login item removed") }
+            catch { print("login item removal failed: \(error.localizedDescription)"); exit(1) }
+            exit(0)
+        }
 
-let app = NSApplication.shared
-app.setActivationPolicy(.accessory)   // no Dock icon; menu bar only
-let delegate = AppDelegate()
-app.delegate = delegate
-app.run()
+        // Single-instance guard: if another copy is already running (e.g. left
+        // over from the old launchd agent), exit immediately so only one menu
+        // bar icon exists.
+        let me = NSRunningApplication.current
+        let bundleID = me.bundleIdentifier ?? "dev.viraat.backbot.menubar"
+        let duplicates = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            .filter { $0.processIdentifier != me.processIdentifier }
+        if !duplicates.isEmpty { exit(0) }
+
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)   // no Dock icon; menu bar only
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.run()
+    }
+}

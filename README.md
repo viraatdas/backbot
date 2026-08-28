@@ -16,6 +16,7 @@ This will:
 - Install dependencies via Homebrew (`restic`, `awscli`, `terminal-notifier`)
 - Run `backbot configure` — set your AWS keys, S3 bucket, repo password, and init the repo
 - Install the nightly launchd job (11:59 PM **and at every login**)
+- Build **BackbotBar**, the menu bar app, and add it as a login item
 
 Then run your first backup:
 
@@ -92,12 +93,49 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.backbot.nightly.plis
 launchctl bootout   gui/$(id -u)/com.backbot.nightly
 ```
 
+## Menu bar app
+
+`BackbotBar.app` is a tiny menu bar agent (no Dock icon) that shows a bot glyph
+with the current backup state — plain when there are no backups yet, a
+checkmark when the last one succeeded, a red cross when it failed, and a
+spinning arc while a backup is running. Its menu shows the last backup time.
+Requires `swiftc` (Xcode Command Line Tools); the installer skips it otherwise.
+
+It starts at login as a **Login Item**, so it appears in System Settings ›
+General › Login Items & Extensions under "Open at Login" with its own name and
+icon. Turn it off there and it stays off — it will not re-register itself.
+
+```bash
+# rebuild after changing the source
+menubar/build.sh ~/.backbot
+
+# manage the login item without System Settings
+~/.backbot/BackbotBar.app/Contents/MacOS/BackbotBar --register-login-item
+~/.backbot/BackbotBar.app/Contents/MacOS/BackbotBar --unregister-login-item
+```
+
+The app icon and the menu bar glyph are the same vector, drawn in Core Graphics
+in `menubar/BackbotMark.swift` and rendered into an `.icns` at build time —
+there is no binary artwork in the repo.
+
+The icon's tile shape is chosen from the macOS version doing the building.
+macOS 26 rounds and shadows app icons itself, but only for art that fills its
+canvas edge to edge; art with transparent margins gets inset onto a light
+backdrop tile instead. macOS 13–15 do no masking and draw the `.icns` as-is. So
+26 gets full-bleed art and earlier versions get a pre-rounded squircle. Since
+the icon is generated on the installing machine, it matches whoever installs.
+
+Older installs started the app from a `com.backbot.menubar` launchd agent;
+re-running the installer removes it, since having both is what used to produce
+two menu bar icons.
+
 ## File Layout
 
 ```
 ~/.config/backbot/restic.conf     # configuration (written by `backbot configure`)
 ~/.config/backbot/exclude.list    # exclusion patterns
 ~/.local/share/backbot/logs/      # backup logs
+~/.backbot/BackbotBar.app         # menu bar app (login item)
 ~/.aws/credentials                # AWS keys (profile: backbot)
 macOS Keychain                    # restic repo password (service: backbot-restic)
 ```

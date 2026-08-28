@@ -28,11 +28,19 @@ if [[ -f "$PLIST_PATH" ]]; then
 fi
 echo
 
-# ── Unload menu bar app ────────────────────────────────────────────────
+# ── Remove menu bar app ────────────────────────────────────────────────
+# Drop the Login Item registration before the bundle goes away, otherwise it
+# lingers as a stale entry in System Settings.
+if [[ -x "$INSTALL_DIR/BackbotBar.app/Contents/MacOS/BackbotBar" ]]; then
+    echo "Removing menu bar login item..."
+    "$INSTALL_DIR/BackbotBar.app/Contents/MacOS/BackbotBar" --unregister-login-item || true
+fi
+osascript -e 'tell application "System Events" to delete (every login item whose name is "BackbotBar")' 2>/dev/null || true
+
+# Older installs autostarted it via a launchd agent instead.
 if launchctl list 2>/dev/null | grep -q "$MENUBAR_NAME"; then
-    echo "Unloading menu bar app..."
     launchctl bootout "gui/$(id -u)/$MENUBAR_NAME" 2>/dev/null || true
-    echo "  Unloaded"
+    echo "  Unloaded legacy launchd agent"
 fi
 pkill -f BackbotBar 2>/dev/null || true
 if [[ -f "$MENUBAR_PATH" ]]; then

@@ -5,6 +5,15 @@
     <key>Label</key>
     <string>com.backbot.nightly</string>
 
+    <!-- Ties this agent to BackbotBar.app so System Settings > General >
+         Login Items & Extensions shows it as "backbot" with the app icon.
+         Without it the row is a bare executable path, and macOS labels it
+         "Item from unidentified developer". -->
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>dev.viraat.backbot.menubar</string>
+    </array>
+
     <key>ProgramArguments</key>
     <array>
         <string>/Users/viraat/.local/bin/backbot</string>
@@ -23,6 +32,8 @@
     <dict>
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/viraat</string>
     </dict>
 
     <key>StandardOutPath</key>
