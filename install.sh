@@ -62,7 +62,18 @@ echo
 mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$BIN_DIR" "$HOME/Library/LaunchAgents"
 
 # ── Exclude list ─────────────────────────────────────────────────────────
-cp "$INSTALL_DIR/exclude.list" "$CONFIG_DIR/exclude.list"
+# The shipped list uses __HOME__ for the few patterns that must anchor at the
+# top of $HOME; expand it here so the installed copy has real paths. An
+# existing list is backed up rather than silently clobbered — a stale copy in
+# the repo must never be able to drop a user's exclusions on reinstall.
+excl_tmp="$(mktemp)"
+sed "s|__HOME__|$HOME|g" "$INSTALL_DIR/exclude.list" > "$excl_tmp"
+if [[ -f "$CONFIG_DIR/exclude.list" ]] && ! cmp -s "$excl_tmp" "$CONFIG_DIR/exclude.list"; then
+    excl_bak="$CONFIG_DIR/exclude.list.bak-$(date +%Y%m%d-%H%M%S)"
+    cp "$CONFIG_DIR/exclude.list" "$excl_bak"
+    echo "Existing exclude list differs — backed up to $excl_bak"
+fi
+mv "$excl_tmp" "$CONFIG_DIR/exclude.list"
 echo "Exclude list: $CONFIG_DIR/exclude.list"
 echo
 
@@ -96,16 +107,28 @@ echo
 # ── Menu bar app (optional, needs swiftc / Xcode CLT) ──────────────────
 if command -v swiftc &>/dev/null; then
     echo "Building the menu bar app (BackbotBar)..."
+
+    # Retire the old launchd agent first. BackbotBar now registers itself as a
+    # real Login Item (SMAppService) and appears in System Settings > General >
+    # Login Items & Extensions under its own name and icon; leaving both
+    # autostart mechanisms in place is what used to launch it twice and spawn
+    # two menu bar icons.
+    launchctl bootout "gui/$(id -u)/$MENUBAR_NAME" 2>/dev/null || true
+    rm -f "$MENUBAR_DEST"
+    osascript -e 'tell application "System Events" to delete (every login item whose name is "BackbotBar")' 2>/dev/null || true
+
+    # Stop the running copy before the build replaces its bundle, and wait for
+    # it to actually exit — the new instance exits on its own if it sees a
+    # duplicate still running, which would leave no icon at all.
+    pkill -f "BackbotBar.app/Contents/MacOS/BackbotBar" 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        pgrep -f "BackbotBar.app/Contents/MacOS/BackbotBar" >/dev/null || break
+        sleep 0.5
+    done
+
     if bash "$INSTALL_DIR/menubar/build.sh" "$INSTALL_DIR"; then
-        sed "s|/Users/viraat|$HOME|g" "$INSTALL_DIR/com.backbot.menubar.plist" > "$MENUBAR_DEST"
-        # The launchd agent is the ONLY autostart mechanism. Remove any stray
-        # "BackbotBar" login item so it can't be launched a second time at login
-        # (that double-launch is what spawned two menu bar icons).
-        osascript -e 'tell application "System Events" to delete (every login item whose name is "BackbotBar")' 2>/dev/null || true
-        launchctl bootout "gui/$(id -u)/$MENUBAR_NAME" 2>/dev/null || true
-        launchctl bootstrap "gui/$(id -u)" "$MENUBAR_DEST"
-        launchctl kickstart "gui/$(id -u)/$MENUBAR_NAME" 2>/dev/null || true
-        echo "Menu bar app installed (starts at every login)."
+        open -a "$INSTALL_DIR/BackbotBar.app"
+        echo "Menu bar app installed (opens at login as a Login Item)."
     else
         echo "Menu bar build failed — skipping (backups still work)."
     fi

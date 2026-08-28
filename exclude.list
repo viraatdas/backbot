@@ -1,85 +1,111 @@
-# Backbot exclusion list for duplicity
-# All patterns use **/ prefix for globbing filelist compatibility
+# backbot exclude list (restic format)
+# - Names without "/" match anywhere in the tree (e.g. node_modules)
+# - Patterns starting with "/" anchor at filesystem root
+# - Glob: * matches within a path component, ** matches across
 
-# Version control internals
-**/.git
+# === Version control & build artifacts (any depth) ===
+.git
+node_modules
+__pycache__
+build
+dist
+.next
+.nuxt
+.turbo
+target
+.gradle
+Pods
+.eggs
+*.egg-info
 
-# Package managers & build artifacts
-**/node_modules
-**/__pycache__
-**/build
-**/dist
-**/.next
-**/.nuxt
-**/target
-**/.gradle
-**/Pods
-**/.eggs
-**/*.egg-info
+# === macOS junk ===
+.DS_Store
+.Spotlight-V100
+.fseventsd
+.TemporaryItems
+.Trashes
 
-# macOS artifacts
-**/.DS_Store
-**/.Spotlight-V100
-**/.fseventsd
-**/.TemporaryItems
+# === macOS protected/system metadata (no process can read these — even with FDA) ===
+Library/Metadata/CoreSpotlight
+Library/Application Support/FileProvider
 
-# macOS system caches and logs
-**/Library/Caches
-**/Library/Logs
-**/Library/Developer
-**/Library/Application Support/MobileSync
-**/.Trash
+# === Top-of-$HOME reproducible / phantom dirs ===
+__HOME__/.Trash
+__HOME__/conductor
+__HOME__/OrbStack
+__HOME__/.orbstack
 
-# Package manager caches
-**/.cache
-**/.npm
-**/.yarn/cache
-**/.pnpm-store
-**/.cargo/registry
-**/.cargo/git
-**/.rustup
-**/.gradle/caches
-**/.cocoapods
-**/.gem
-**/.cpan
-**/.m2/repository
+# === Language / package-manager caches (any location) ===
+.cache
+.npm
+.bun
+.yarn/cache
+.pnpm-store
+.cargo/registry
+.cargo/git
+.rustup
+.gradle/caches
+.cocoapods
+.gem
+.cpan
+.m2/repository
+.electron-gyp
+.expo
+.cdk
+.fastlane
+.ghcup
+.cabal
+.stack
+.superset
+.EasyOCR
 
-# Python virtual environments
-**/.venv
-**/venv
-**/.tox
-**/.mypy_cache
-**/.pytest_cache
+# === Python virtualenvs ===
+.venv
+venv
+.tox
+.mypy_cache
+.pytest_cache
+.ruff_cache
 
-# Docker
-**/.docker/buildx
-**/Library/Containers/com.docker.*
+# === Docker / container state ===
+.docker/buildx
 
-# Steam and games
-**/Library/Application Support/Steam/steamapps
-**/Library/Application Support/Steam/SteamApps
+# === macOS Library — reproducible / synced-elsewhere subtrees ===
+Library/Caches
+Library/Logs
+Library/Developer
+Library/Application Support/MobileSync
+Library/Application Support/Steam/steamapps
+Library/Application Support/Steam/SteamApps
+Library/Application Support/Slack
+Library/Application Support/discord
+Library/Application Support/Code/Cache
+Library/Application Support/Code/CachedData
+Library/Application Support/Cursor/Cache
+Library/Application Support/Cursor/CachedData
+Library/Application Support/Google/Chrome
+Library/Application Support/Firefox
+Library/Application Support/BraveSoftware
+Library/Application Support/Spotify
+Library/Application Support/Docker Desktop
+Library/Group Containers
+Library/Containers
+Library/pnpm
+Library/Photos
+Library/Daemon Containers
+Library/IntelligencePlatform
+Library/DuetExpertCenter
+Library/Biome
 
-# Large reproducible app data
-**/Library/Application Support/Slack/Cache
-**/Library/Application Support/Slack/Service Worker
-**/Library/Application Support/discord/Cache
-**/Library/Application Support/Google/Chrome/Default/Service Worker
-**/Library/Application Support/Firefox/Profiles/*/cache2
+# === Virtual machine images ===
+*.vmdk
+*.vdi
+*.qcow2
+*.raw
+VirtualBox VMs
 
-# Virtual machines
-**/*.vmdk
-**/*.vdi
-**/*.qcow2
-**/VirtualBox VMs
-
-# Temporary files
-**/*.tmp
-**/*.swp
-**/*.swo
-**/tmp
-
-# Duplicity's own cache
-**/.cache/duplicity
-
-# Homebrew downloads
-**/Library/Caches/Homebrew
+# === Temp files ===
+*.tmp
+*.swp
+*.swo
+tmp
